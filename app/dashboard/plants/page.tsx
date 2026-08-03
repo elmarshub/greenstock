@@ -1,4 +1,8 @@
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import InventoryTable from "@/components/plants/inventory-table";
+import { getPlants } from "@/app/actions/plant.action";
+import { plantKeys } from "@/lib/query-keys";
+import { getQueryClient } from "@/providers/get-query-client";
 import type { PlantCategory } from "@/lib/validations/plant";
 import { PLANT_CATEGORIES } from "@/lib/validations/plant";
 
@@ -12,6 +16,12 @@ export default async function Plants({ searchParams }: PlantsProps) {
     ? (category as PlantCategory)
     : undefined;
 
+  const queryClient = getQueryClient();
+  await queryClient.prefetchQuery({
+    queryKey: plantKeys.list(),
+    queryFn: () => getPlants(),
+  });
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-6">
@@ -22,7 +32,9 @@ export default async function Plants({ searchParams }: PlantsProps) {
           Search, filter, and manage every plant in your collection.
         </p>
       </div>
-      <InventoryTable initialCategory={initialCategory} />
+      <HydrationBoundary state={dehydrate(queryClient)}>
+        <InventoryTable initialCategory={initialCategory} />
+      </HydrationBoundary>
     </div>
   );
 }
