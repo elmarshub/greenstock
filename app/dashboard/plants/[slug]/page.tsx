@@ -1,6 +1,9 @@
 import React from "react";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import PlantDetailView from "@/components/plants/plant-detail-view";
 import { getPlantsById } from "@/app/actions/plant.action";
+import { plantKeys } from "@/lib/query-keys";
+import { getQueryClient } from "@/providers/get-query-client";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -36,7 +39,17 @@ async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [id] = slug.split("--");
 
-  return <PlantDetailView id={id} />;
+  const queryClient = getQueryClient();
+  await queryClient.prefetchQuery({
+    queryKey: plantKeys.detail(id),
+    queryFn: () => getPlantsById(id),
+  });
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <PlantDetailView id={id} />
+    </HydrationBoundary>
+  );
 }
 
 export default Page;
