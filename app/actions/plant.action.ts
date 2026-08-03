@@ -1,59 +1,98 @@
 "use server";
 
-import { getUserId } from "./user.action";
+import { cache } from "react";
+import { getCurrentUserId, requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import {
+  plantFormSchema,
+  type PlantFormValues,
+} from "@/lib/validations/plant";
 
 export async function getPlants(searchTerm?: string) {
+
+  const currentUserId = await getCurrentUserId();
+  if (!currentUserId) {
+    return { success: true, userPlants: [] };
+  }
+
   try {
-    const currentUserId = await getUserId();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const whereClause: any = {
-      userId: currentUserId,
-    };
-
-    if (searchTerm) {
-      whereClause.name = {
-        contains: searchTerm,
-        mode: "insensitive",
-      };
-    }
-
     const userPlants = await prisma.plants.findMany({
-      where: whereClause,
+      where: {
+        userId: currentUserId,
+        ...(searchTerm
+          ? { name: { contains: searchTerm, mode: "insensitive" as const } }
+          : {}),
+      },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    revalidatePath("/");
     return { success: true, userPlants };
   } catch (error) {
-    console.log(error);
-    throw new Error("Failed to fetch plant");
+    console.error("Error fetching plants:", error);
+    throw new Error("Failed to fetch plants");
   }
 }
 
+const getPlantByIdForUser = cache(async (id: string, userId: string | undefined) => {
+  if (!userId) return null;
+
+  const plant = await prisma.plants.findUnique({ where: { id } });
+
+  // Don't leak other users' plants to someone guessing ids.
+  if (!plant || plant.userId !== userId) return null;
+
+  return plant;
+});
+
 export async function getPlantsById(id: string) {
-  return await prisma.plants.findUnique({
-    where: { id },
-  });
+  const currentUserId = await getCurrentUserId();
+  return getPlantByIdForUser(id, currentUserId);
 }
 
-export async function editPlant(id: string, data: Prisma.PlantsUpdateInput) {
+async function assertPlantOwnership(id: string, userId: string) {
+  const plant = await prisma.plants.findUnique({ where: { id } });
+  if (!plant) {
+    throw new Error("Plant not found");
+  }
+  if (plant.userId !== userId) {
+    throw new Error("Unauthorized: you don't own this plant");
+  }
+  return plant;
+}
+
+export async function createPlant(data: PlantFormValues) {
+  const currentUserId = await requireUserId();
+  const plantData = plantFormSchema.parse(data);
+
   try {
-    const currentUserId = await getUserId();
-    const updatedPlant = await prisma.plants.update({
-      where: { id },
+    const newPlant = await prisma.plants.create({
       data: {
-        ...data,
+        ...plantData,
         userId: currentUserId,
       },
     });
 
-    revalidatePath("/plants");
+    return newPlant;
+  } catch (error) {
+    console.error("Error creating plant:", error);
+    throw error;
+  }
+}
+
+export async function editPlant(id: string, data: PlantFormValues) {
+  const currentUserId = await requireUserId();
+  const plantData = plantFormSchema.parse(data);
+
+  try {
+    await assertPlantOwnership(id, currentUserId);
+
+    const updatedPlant = await prisma.plants.update({
+      where: { id },
+      data: plantData,
+    });
+
     return updatedPlant;
   } catch (error) {
     console.error("Error updating plant:", error);
@@ -62,18 +101,18 @@ export async function editPlant(id: string, data: Prisma.PlantsUpdateInput) {
 }
 
 export async function deletePlant(id: string) {
-  try {
-    const currentUserId = await getUserId();
-    if (!currentUserId) return;
+  const currentUserId = await requireUserId();
 
-    const deletedProduct = await prisma.plants.delete({
+  try {
+    await assertPlantOwnership(id, currentUserId);
+
+    const deletedPlant = await prisma.plants.delete({
       where: { id },
     });
 
-    revalidatePath("/plants");
-    return deletedProduct;
+    return deletedPlant;
   } catch (error) {
-    console.error("Error deleting product:", error);
+    console.error("Error deleting plant:", error);
     throw error;
   }
 }

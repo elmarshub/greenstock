@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["@prisma/client"],
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  serverExternalPackages: ["@prisma/client"],
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -18,7 +13,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/plants/:path*",
+        source: "/dashboard/plants/:path*",
         headers: [
           {
             key: "Cache-Control",
