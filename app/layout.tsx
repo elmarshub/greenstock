@@ -3,9 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackServerApp } from "../stack";
-import { ThemeProvider } from "@/components/theme-provider";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/footer";
+import { QueryProvider } from "@/providers/query-provider";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 
@@ -37,23 +35,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={`${inter.variable} antialiased`}>
         <StackProvider app={stackServerApp}>
           <StackTheme>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <div className="flex min-h-screen flex-col">
-                <Navbar />
-                <Toaster />
-                <main className="flex-1">{children}</main>
-                <Footer />
-              </div>
-            </ThemeProvider>
+            <QueryProvider>
+              <Toaster />
+              {children}
+            </QueryProvider>
           </StackTheme>
         </StackProvider>
       </body>
